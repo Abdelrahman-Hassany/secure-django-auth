@@ -112,3 +112,21 @@ python manage.py runserver
 ├── .env
 └── README.md
 ```
+
+## Testing
+
+The project includes automated API tests using Django's `APITestCase`.
+
+To run the tests:
+
+```bash
+python manage.py test
+```
+
+Tests cover key authentication flows including:
+
+- Successful and failed user registration
+- Login and token issuance
+- Logout and token blacklisting
+- Protected routes access
+- Access token refresh through middleware
