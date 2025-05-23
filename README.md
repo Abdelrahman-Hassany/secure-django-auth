@@ -104,7 +104,8 @@ python manage.py runserver
 │   ├── authbackend.py      # Custom EmailBackend
 │   └── ...
 ├── CoreAuth/
-│   ├── views.py            # Register, Login, Logout, Me
+│   ├── api_views.py        # API for Register, Login, Logout, Me
+│   ├── views.py            # for render Templates
 │   ├── serializer.py       # RegisterSerializer
 │   ├── customJWT.py        # Token blacklist logic using cache
 │   └── ...
