@@ -1,0 +1,180 @@
+<nav class="bg-gray-50 dark:bg-gray-700 fixed w-full top-0 left-0 z-50">
+    <div class="max-w-screen-xl px-4 py-3 mx-auto">
+        <div class="flex items-center justify-between">
+            <ul class="flex flex-row font-medium mt-0 space-x-8 rtl:space-x-reverse text-sm">
+                <li>
+                    <a href="{% url 'homepage' %}" class="text-gray-900 dark:text-white hover:underline"
+                        aria-current="page">Home</a>
+                </li>
+            </ul>
+            <div class="flex items-center">
+                {% if user.is_authenticated %}
+                <!-- User is logged in: Show initials and dropdown -->
+                <div class="relative">
+                    <button id="userDropdownButton" class="flex items-center space-x-2 focus:outline-none"
+                        aria-label="User menu">
+                        <div
+                            class="w-8 h-8 flex items-center justify-center bg-blue-600 text-white rounded-full font-medium text-sm">
+                            {{ user.first_name|slice:":1" }}{{ user.last_name|slice:":1" }}
+                        </div>
+                    </button>
+                    <!-- Dropdown Menu -->
+                    <div id="userDropdown"
+                        class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 dark:bg-gray-800">
+                        <a href="#"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">Profile</a>
+                        <a href="#"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">Settings</a>
+                        <a href="#" id="logoutButton"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                            Logout
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <!-- User is not logged in: Show Tailwind avatar and login form dropdown -->
+                <div class="relative">
+                    <button id="userDropdownButton" class="flex items-center space-x-2 focus:outline-none"
+                        aria-label="User menu">
+                        <div class="w-8 h-8 flex items-center justify-center bg-gray-300 text-gray-600 rounded-full">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                    </button>
+                    <!-- Dropdown Menu with Login Form -->
+                    <div id="userDropdown"
+                        class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg py-4 z-50 dark:bg-gray-800">
+                        <form id="loginForm" class="space-y-4 px-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label>
+                                <input type="email" name="email" required
+                                    class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    placeholder="Enter your email" />
+                                <p class="text-sm text-red-600 mt-1 hidden"></p>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-200">Password</label>
+                                <input type="password" name="password" required
+                                    class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    placeholder="Enter your password" />
+                                <p class="text-sm text-red-600 mt-1 hidden"></p>
+                            </div>
+                            <button type="submit"
+                                class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-300 font-medium">
+                                Login
+                            </button>
+                            <p class="text-sm text-center text-gray-600 dark:text-gray-200">
+                                Don't have an account?
+                                <a href="{% url 'register' %}"
+                                    class="text-blue-600 hover:underline dark:text-blue-500">Register</a>
+                            </p>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>
+
+
+<script>
+    const dropdownButton = document.getElementById('userDropdownButton');
+    const dropdownMenu = document.getElementById('userDropdown');
+
+    dropdownButton.addEventListener('click', (e) => {
+        e.preventDefault(); 
+        dropdownMenu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!dropdownButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            dropdownMenu.classList.add('hidden');
+        }
+    });
+    const logoutButton = document.getElementById('logoutButton');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            try {
+                const res = await fetch('/api/logout/', {
+                    method: 'POST',
+                    credentials: 'include', 
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    window.location.reload();
+
+                } else {
+                    alert(result.detail || "Logout failed.");
+                }
+            } catch (err) {
+                alert("Something went wrong during logout.");
+            }
+        });
+    }
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            clearErrors();
+
+            const formData = new FormData(loginForm);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const res = await fetch('/api/login/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    handleErrors(result);
+                }
+            } catch (err) {
+                showError("Something went wrong. Please try again.");
+            }
+        });
+    }
+
+    function showError(message) {
+        const errorElement = loginForm.querySelector('p.text-red-600');
+        errorElement.textContent = message;
+        errorElement.classList.remove('hidden');
+    }
+
+    function handleErrors(errors) {
+        for (const field in errors) {
+            const input = loginForm.querySelector(`[name="${field}"]`);
+            if (input) {
+                input.classList.add("border-red-500");
+                const errorElement = input.nextElementSibling;
+                errorElement.textContent = errors[field];
+                errorElement.classList.remove("hidden");
+            }
+        }
+    }
+
+    function clearErrors() {
+        loginForm.querySelectorAll("input").forEach(input => {
+            input.classList.remove("border-red-500");
+        });
+        loginForm.querySelectorAll("p.text-red-600").forEach(p => {
+            p.textContent = "";
+            p.classList.add("hidden");
+        });
+    }
+</script>

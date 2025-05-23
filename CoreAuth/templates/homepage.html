@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomePage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</head>
+
+<body class="bg-gray-100">
+    <!-- Navbar -->
+    {% include 'partiles/navbar.html' %}
+
+    <div class="pt-[60px]">
+
+
+        {% block content %}
+        <!-- Welcome Card for Logged-In Users -->
+        {% if user.is_authenticated %}
+        <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg text-center mx-auto mt-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Welcome, {{ user.first_name|default:user.username }}!</h2>
+            <p class="text-gray-600 mb-6">We're glad you're here. Explore your dashboard or update your profile to get
+                started.</p>
+            <div class="flex justify-center space-x-4">
+                <a href="#"
+                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 font-medium">View
+                    Dashboard</a>
+                <a href="#"
+                    class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition duration-300 font-medium">Update
+                    Profile</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg text-center mx-auto mt-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Welcome, You Need to
+                <a href="{% url 'login' %}"><u>sign in</u></a>
+            </h2>
+        </div>
+    </div>
+    {% endif %}
+    {% endblock %}
+    </div>
+
+</body>
+
+</html>
