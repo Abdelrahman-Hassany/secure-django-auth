@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework_simplejwt',
     'rest_framework',
+    'axes',
     'CoreAuth',
 ]
 
@@ -56,6 +57,7 @@ MIDDLEWARE = [
     'Authentication.middleware.JWTMiddleware', #custom middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware', #axes middleware
 ]
 
 ROOT_URLCONF = 'Authentication.urls'
@@ -95,19 +97,29 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
+        # Ensures the password is not too similar to the user's personal information
+        # Purpose: Prevents easy-to-guess passwords like using the username or email
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
+        # Enforces a minimum password length (e.g., at least 8 characters)
+        # Purpose: Increases password complexity to reduce brute-force risk
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
     },
     {
+        # Rejects commonly used weak passwords like "123456" or "password"
+        # Purpose: Protects against passwords that are widely known or breached
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
+        # Disallows passwords that are entirely numeric
+        # Purpose: Forces users to use a mix of letters and numbers for better strength
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
@@ -125,6 +137,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -145,7 +161,6 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_SAMESITE': 'Lax',
 }
 #redis cloud config
-
 CACHES = {
     "default":{
         "BACKEND":'django_redis.cache.RedisCache',
@@ -158,6 +173,7 @@ CACHES = {
 
 #for sign in with email
 AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
     'Authentication.AuthBackend.EmailBackend',
 ]
 
@@ -171,9 +187,15 @@ REST_FRAMEWORK = {
 #custom user model
 AUTH_USER_MODEL = 'CoreAuth.User'
 
-#enviroment variable
-
+#recaptcha secret key
 RECAPTCHA_SECRET_KEY = os.environ.get('captcha_key')
 
-
+#it's test in (python manage.py test), <it will be true>
 TESTING = 'test' in sys.argv
+
+#axes config
+AXES_ENABLED = True
+AXES_CACHE = 'default'  
+AXES_FAILURE_LIMIT = 3  
+AXES_COOLOFF_TIME = timedelta(minutes=15)  
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']

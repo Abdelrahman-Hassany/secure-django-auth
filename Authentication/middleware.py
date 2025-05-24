@@ -18,7 +18,7 @@ class JWTMiddleware(MiddlewareMixin):
 
         # Reject request if token is blacklisted
         if CustomJWT.is_blacklisted(token):
-            return JsonResponse({"detail": "Access token is blacklisted."}, status=401)
+            raise InvalidTokenError("Access token is blacklisted.")
 
         # Inject token into headers for DRF authentication
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
@@ -53,9 +53,9 @@ class JWTMiddleware(MiddlewareMixin):
             except Exception:
                 return JsonResponse({"detail": "Refresh failed."}, status=401)
 
-        except InvalidTokenError:
+        except InvalidTokenError as e:
             # Invalid token (not expired), reject the request
-            return JsonResponse({"detail": "Invalid access token."}, status=401)
+            raise e
 
     def process_response(self, request, response):
         """If access token was refreshed, update the cookie in the response"""

@@ -26,6 +26,7 @@ These are the core packages used:
 - `django-redis==5.4.0`
 - `python-dotenv==1.1.0`
 - `requests==2.32.3`
+- `django-axes==8.0.0;`
 
 
 > `reCAPTCHA v2` is used via Google’s API, ensure your keys are set in `.env`.
@@ -36,20 +37,20 @@ These are the core packages used:
 
 Use your preferred tool. For example, with pipenv:
 
-```bash
+```
 pipenv shell
 ```
 
 ### 2. Install dependencies
 
-```bash
-pipenv install -r requirements.txt
+```
+pipenv install 
 ```
 
 Or manually:
 
 ```bash
-pipenv install django djangorestframework djangorestframework-simplejwt django-redis python-dotenv requests 
+pipenv install django djangorestframework djangorestframework-simplejwt django-redis python-dotenv requests django-axes
 ```
 
 ## Environment Variables
@@ -68,7 +69,7 @@ You can load the `.env` file in `settings.py` using `python-dotenv`.
 
 Apply migrations and run the development server:
 
-```bash
+```
 python manage.py migrate
 python manage.py runserver
 ```
@@ -88,6 +89,26 @@ python manage.py runserver
 - Middleware handles auto-refresh on expired access token
 - Blacklisted tokens are cached using `django-redis`
 - Token `jti` is used to manage blacklisting until expiration
+
+## Security Notes
+
+- reCAPTCHA v2 is used in the registration process to block bots
+- Login is rate-limited using `django-axes` to prevent brute-force attacks
+- Password validation rules enforced:
+  - Minimum 8 characters
+  - Not too similar to user attributes
+  - Not a common password
+  - Not entirely numeric
+- Middleware injects the token into request headers for DRF authentication
+- All security best practices are followed (except `secure=False` in dev, should be `True` in production)
+
+> Note: You should include the following method in your registration serializer to activate password validation:
+
+```python
+def validate_password(self, value):
+    validate_password(value)
+    return value
+```
 
 ## Notes
 
@@ -120,7 +141,7 @@ The project includes automated API tests using Django's `APITestCase`.
 
 To run the tests:
 
-```bash
+```
 python manage.py test
 ```
 

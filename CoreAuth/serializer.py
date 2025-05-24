@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.password_validation import validate_password
 
 User = get_user_model()
 
@@ -22,7 +23,11 @@ class RegisterSerializer(serializers.ModelSerializer):
             'password',
             'confirm_password'
         ]
-
+    def validate_password(self, value):
+        """Validate that password is secure"""
+        validate_password(value)
+        return value
+    
     def validate(self, data):
         """Validate that password and confirm_password match"""
         if data['password'] != data['confirm_password']:

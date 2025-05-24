@@ -1,11 +1,12 @@
 from django.contrib.auth import authenticate
+from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from django.conf import settings
+from axes.handlers.proxy import AxesProxyHandler
 import requests
 from .serializer import RegisterSerializer
 from .customJWT import CustomJWT
@@ -76,7 +77,7 @@ class LoginApiView(APIView):
         password = request.data.get('password')
 
         # Authenticate user using custom backend
-        user = authenticate(request, email=email, password=password)
+        user = authenticate(request=request, email=email, password=password)
 
         if user is not None:
             token = RefreshToken.for_user(user)
@@ -104,6 +105,8 @@ class LoginApiView(APIView):
             )
 
             return response
+        if AxesProxyHandler.is_locked(request):
+            return Response({'detail':'You Locked Please try again in 15 minutes.'},status=status.HTTP_403_FORBIDDEN)
 
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 

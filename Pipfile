@@ -11,6 +11,7 @@ python-dotenv = "*"
 requests = "*"
 django-redis = "*"
 redis = "*"
+django-axes = "*"
 
 [dev-packages]
 

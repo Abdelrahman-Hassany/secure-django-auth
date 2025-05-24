@@ -8,6 +8,7 @@
         <div id="message" class="mb-4 text-sm text-center font-medium text-gray-600"></div>
 
         <form id="registerForm" class="space-y-6">
+            {% csrf_token %}
             <div>
                 <label class="block text-sm font-medium text-gray-700">First Name</label>
                 <input type="text" name="first_name" required
