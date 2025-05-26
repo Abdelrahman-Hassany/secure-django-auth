@@ -91,7 +91,7 @@ class LoginApiView(APIView):
                 httponly=True,
                 secure=False,
                 samesite='Lax',
-                max_age=3600,
+                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),  # making it import from SIMPLE_JWT in settings, and making it 1 minute for test access token
             )
 
             # Set refresh token
@@ -101,7 +101,7 @@ class LoginApiView(APIView):
                 httponly=True,
                 secure=False,
                 samesite='Lax',
-                max_age=7 * 24 * 60 * 60,
+                max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
             )
 
             return response
