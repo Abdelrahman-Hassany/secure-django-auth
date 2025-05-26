@@ -51,7 +51,7 @@ class RegisterApiView(APIView):
                 httponly=True,
                 secure=False,  # Set to True in production
                 samesite='Lax',
-                max_age=3600
+                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),  # making it import from SIMPLE_JWT in settings, and making it 1 minute for test access token
             )
 
             # Set refresh token in HTTP-only cookie
@@ -61,7 +61,7 @@ class RegisterApiView(APIView):
                 httponly=True,
                 secure=False,  # Set to True in production
                 samesite='Lax',
-                max_age=7 * 24 * 3600
+                max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
             )
 
             return response

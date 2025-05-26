@@ -1,71 +1,88 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-from jwt import ExpiredSignatureError, InvalidTokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import (
+    InvalidToken,
+    AuthenticationFailed,
+    TokenError
+)
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from CoreAuth.customJWT import CustomJWT
+from django.conf import settings
 
 class JWTMiddleware(MiddlewareMixin):
-    """Middleware: Handles JWT access/refresh from cookies, injects auth header, and refreshes if needed."""
+    """
+    Middleware: Intercepts requests to authenticate users using JWT tokens stored in cookies.
+    Automatically injects access token into headers, attempts re-authentication using refresh token if needed,
+    and refreshes token when expired.
+    """
 
     def process_request(self, request):
-        """Intercept request, validate or refresh JWT from cookies, and attach user if valid"""
+        """
+        Check access and refresh tokens in cookies, inject them into headers for DRF,
+        and attach the authenticated user to the request if valid.
+        """
         token = request.COOKIES.get("access_token")
         refresh_token = request.COOKIES.get("refresh_token")
-
-        if not token:
-            return  # No access token provided, let unauthenticated request pass
-
-        # Reject request if token is blacklisted
-        if CustomJWT.is_blacklisted(token):
-            raise InvalidTokenError("Access token is blacklisted.")
-
-        # Inject token into headers for DRF authentication
-        request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
         authenticator = JWTAuthentication()
 
-        try:
-            # Try authenticating with access token
-            user, validated_token = authenticator.authenticate(request)
-            request.user = user
+        # Allow anonymous requests if no tokens are found
+        if not token and not refresh_token:
+            return
 
-        except ExpiredSignatureError:
-            # If token expired, try using the refresh token
-            if not refresh_token:
-                return JsonResponse({"detail": "Access token expired. No refresh token."}, status=401)
+        # Block blacklisted access token
+        if token and CustomJWT.is_blacklisted(token):
+            return JsonResponse({"detail": "Unauthorized access."}, status=401)
 
-            if CustomJWT.is_blacklisted(refresh_token):
-                return JsonResponse({"detail": "Refresh token is blacklisted."}, status=401)
-
+        if token:
+            # Inject token into headers for DRF authentication
+            request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
             try:
-                # Create new access token from refresh token
+                # Attempt authentication using access token
+                auth_result = authenticator.authenticate(request)
+                if auth_result is not None:
+                    user, validated_token = auth_result
+                    request.user = user
+                    return
+            except (AuthenticationFailed, InvalidToken) as e:
+                # Access token invalid or expired — will try refresh token fallback
+                pass
+
+        # If refresh token is available and valid (not blacklisted)
+        if refresh_token and not CustomJWT.is_blacklisted(refresh_token):
+            try:
+                # Use refresh token to generate new access token
                 new_refresh = RefreshToken(refresh_token)
                 new_access = str(new_refresh.access_token)
 
-                # Inject refreshed token into header for retrying authentication
+                # Inject new access token into header and attach to request for later use
                 request.META["HTTP_AUTHORIZATION"] = f"Bearer {new_access}"
                 request._refresh_access_token = new_access
 
-                # Re-authenticate with the new access token
+                # Attempt authentication using new access token
                 user, validated_token = authenticator.authenticate(request)
                 request.user = user
+                return
+            except TokenError as e:
+                # Refresh token is invalid or expired
+                return JsonResponse({"detail": "Session expired. Please log in again."}, status=401)
 
-            except Exception:
-                return JsonResponse({"detail": "Refresh failed."}, status=401)
-
-        except InvalidTokenError as e:
-            # Invalid token (not expired), reject the request
-            raise e
+        # No valid access or refresh token — allow as anonymous or protect using decorators later
+        return
 
     def process_response(self, request, response):
-        """If access token was refreshed, update the cookie in the response"""
+        """
+        If access token was refreshed during request processing,
+        update it in the user's cookies.
+        """
         if hasattr(request, "_refresh_access_token"):
             response.set_cookie(
                 key='access_token',
                 value=request._refresh_access_token,
                 httponly=True,
-                secure=False,      # Should be True in production
+                secure=False,  # Use True in production with HTTPS
                 samesite='Lax',
-                max_age=3600       # Token lifetime in seconds
+                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),    # making it import from SIMPLE_JWT in settings, and making it 1 minute for test access token
+                path="/"
             )
         return response
