@@ -57,3 +57,24 @@ class RegisterSerializer(serializers.ModelSerializer):
             'access_token': str(refresh.access_token),
             'refresh_token': str(refresh)
         }
+
+class RequestPasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    
+    def validate_email(self, value):
+        if not User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("No user is associated with this email address.")
+        return value
+    
+class ResetPasswordSerializer(serializers.Serializer):
+    new_password = serializers.RegexField(
+        regex=r'^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$',
+        write_only=True,
+        error_messages={'invalid': ('Password must be at least 8 characters long with at least one capital letter and symbol')})
+    confirm_password = serializers.CharField(write_only=True, required=True)
+    
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        return data
+    

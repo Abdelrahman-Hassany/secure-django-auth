@@ -1,15 +1,20 @@
-from django.contrib.auth import authenticate
+import requests
+import os
+from django.contrib.auth import authenticate,get_user_model,tokens
 from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from axes.handlers.proxy import AxesProxyHandler
-import requests
-from .serializer import RegisterSerializer
 from .customJWT import CustomJWT
+from .serializer import RegisterSerializer,RequestPasswordResetSerializer,ResetPasswordSerializer
+from .models import PasswordReset
+from django.core.mail import send_mail
+
+User = get_user_model()
 
 class RegisterApiView(APIView):
     """POST: Handles user registration with optional reCAPTCHA and sets tokens in cookies"""
@@ -150,3 +155,76 @@ class MeView(APIView):
             "first_name": user.first_name,
             "last_name": user.last_name,
         })
+
+class RequestPasswordResetApiView(APIView):
+    serializer_class = RequestPasswordResetSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        user = User.objects.filter(email__iexact=email).first()
+
+        if user:
+            # Delete any old reset tokens
+            PasswordReset.objects.filter(user=user).delete()
+
+            # Generate token
+            token_generator = tokens.PasswordResetTokenGenerator()
+            token = token_generator.make_token(user)
+
+            # Save new token
+            PasswordReset.objects.create(user=user, token=token)
+
+            # Generate reset URL
+            reset_url = f"{settings.PASSWORD_RESET_BASE_URL}/{token}"
+
+            # Compose and send email
+            message = f"""Dear {user.username},
+            
+                        We received a request to reset the password for your account.
+                        If you want to reset your password, click the link below (or copy and paste it into your browser):
+                        {reset_url}
+                        If you did not request this, please ignore this message. Your password will not be changed.
+                        """
+
+            send_mail(
+                "Reset Your Password",
+                message,
+                settings.EMAIL_HOST_USER,
+                [email],
+                fail_silently=False,
+            )
+
+            return Response({'success': 'We have sent you a link to reset your password'}, status=status.HTTP_200_OK)
+
+        return Response({"error": "User with credentials not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class ResetPasswordApiView(APIView):
+    serializer_class = ResetPasswordSerializer
+    
+    def post(self,request,token):
+        try:
+            serializer  = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data= serializer.validated_data
+            
+            reset_obj = PasswordReset.objects.filter(token=token).first()
+            
+            if not reset_obj:
+                return Response({'error':'Invalid token'}, status=400)
+            
+            if reset_obj.is_expired():
+                reset_obj.delete()
+                return Response({'error': 'Token expired'}, status=400)
+            
+            user = reset_obj.user
+            user.set_password(data['new_password'])
+            user.save()
+                
+            reset_obj.delete()
+                
+            return Response({'success':'Password updated'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+      

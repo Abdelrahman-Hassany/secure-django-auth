@@ -199,3 +199,13 @@ AXES_CACHE = 'default'
 AXES_FAILURE_LIMIT = 3  
 AXES_COOLOFF_TIME = timedelta(minutes=15)  
 AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+
+#smtp config
+MAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+PASSWORD_RESET_BASE_URL = os.environ.get('PASSWORD_RESET_BASE_URL')
