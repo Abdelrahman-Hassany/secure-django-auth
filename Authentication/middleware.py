@@ -9,19 +9,19 @@ from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from CoreAuth.customJWT import CustomJWT
 from django.conf import settings
+from django.shortcuts import redirect
+from django.urls import reverse
+import logging
+
+logger = logging.getLogger(__name__)
 
 class JWTMiddleware(MiddlewareMixin):
     """
-    Middleware: Intercepts requests to authenticate users using JWT tokens stored in cookies.
-    Automatically injects access token into headers, attempts re-authentication using refresh token if needed,
-    and refreshes token when expired.
+    Middleware to authenticate users using JWT tokens stored in cookies and ensure account activation.
     """
-
     def process_request(self, request):
-        """
-        Check access and refresh tokens in cookies, inject them into headers for DRF,
-        and attach the authenticated user to the request if valid.
-        """
+        excluded_paths = [reverse('api_logout'), reverse('activation-page'),reverse('api_resend_activation_code'),reverse('api_active_account')]
+
         token = request.COOKIES.get("access_token")
         refresh_token = request.COOKIES.get("refresh_token")
         authenticator = JWTAuthentication()
@@ -35,41 +35,40 @@ class JWTMiddleware(MiddlewareMixin):
             return JsonResponse({"detail": "Unauthorized access."}, status=401)
 
         if token:
-            # Inject token into headers for DRF authentication
             request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
             try:
-                # Attempt authentication using access token
-                auth_result = authenticator.authenticate(request)
-                if auth_result is not None:
-                    user, validated_token = auth_result
-                    request.user = user
-                    return
-            except (AuthenticationFailed, InvalidToken) as e:
-                # Access token invalid or expired — will try refresh token fallback
-                pass
-
-        # If refresh token is available and valid (not blacklisted)
-        if refresh_token and not CustomJWT.is_blacklisted(refresh_token):
-            try:
-                # Use refresh token to generate new access token
-                new_refresh = RefreshToken(refresh_token)
-                new_access = str(new_refresh.access_token)
-
-                # Inject new access token into header and attach to request for later use
-                request.META["HTTP_AUTHORIZATION"] = f"Bearer {new_access}"
-                request._refresh_access_token = new_access
-
-                # Attempt authentication using new access token
                 user, validated_token = authenticator.authenticate(request)
                 request.user = user
+                if hasattr(request.user, "profile") and request.user.is_authenticated:
+                    if not request.user.profile.is_activated:
+                        if not any(request.path.startswith(path) for path in excluded_paths):
+                            return redirect('activation-page')
                 return
-            except TokenError as e:
-                # Refresh token is invalid or expired
-                return JsonResponse({"detail": "Session expired. Please log in again."}, status=401)
+            except (AuthenticationFailed, InvalidToken):
+                pass
 
-        # No valid access or refresh token — allow as anonymous or protect using decorators later
+        # Try refresh token if access token is invalid
+        if refresh_token and not CustomJWT.is_blacklisted(refresh_token):
+            try:
+                new_refresh = RefreshToken(refresh_token)
+                new_access = str(new_refresh.access_token)
+                request.META["HTTP_AUTHORIZATION"] = f"Bearer {new_access}"
+                request._refresh_access_token = new_access
+                user, validated_token = authenticator.authenticate(request)
+                request.user = user
+                if hasattr(request.user, "profile") and request.user.is_authenticated:
+                    if not request.user.profile.is_activated:
+                        if not any(request.path.startswith(path) for path in excluded_paths):
+                            return redirect('activation-page')
+                return
+            except TokenError:
+                # For web requests, redirect to login; for API, return JSON
+                if request.is_ajax():
+                    return JsonResponse({"detail": "Session expired. Please log in again."}, status=401)
+                return redirect('login')
+
         return
-
+    
     def process_response(self, request, response):
         """
         If access token was refreshed during request processing,

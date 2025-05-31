@@ -1,5 +1,6 @@
 import requests
-import os
+from django.utils import timezone
+from datetime import timedelta
 from django.contrib.auth import authenticate,get_user_model,tokens
 from django.conf import settings
 from rest_framework import status
@@ -11,8 +12,11 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from axes.handlers.proxy import AxesProxyHandler
 from .customJWT import CustomJWT
 from .serializer import RegisterSerializer,RequestPasswordResetSerializer,ResetPasswordSerializer
-from .models import PasswordReset
+from .models import PasswordReset,ActivationCode
 from django.core.mail import send_mail
+from .utils.send_code import send_activation_code
+from .utils.ratelimit import activation_code_ratelimit
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -40,15 +44,27 @@ class RegisterApiView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             data = serializer.save()
+            
+            user = User.objects.get(email=data['email'])  # Get saved user
+            
+            try:
+                existing_codes = ActivationCode.objects.filter(user=user)
+                if existing_codes.exists():
+                    existing_codes.delete()
+                send_activation_code(user)
+                activation_status = 'Activation code sent to your email.'
+            except Exception as e:
+                activation_status = f'Account created but failed to send activation code. Error: {str(e)}'
+                
             response = Response(
                 {
                     'user name': data['userName'],
                     'email': data['email'],
                     'message': 'Register Success',
+                    'activation_status': activation_status
                 },
                 status=status.HTTP_201_CREATED
             )
-
             # Set access token in HTTP-only cookie
             response.set_cookie(
                 key='access_token',
@@ -67,12 +83,10 @@ class RegisterApiView(APIView):
                 secure=False,  # Set to True in production
                 samesite='Lax',
                 max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
-            )
-
+            )   
             return response
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class LoginApiView(APIView):
     """POST: Authenticates user and returns tokens in cookies"""
@@ -115,10 +129,9 @@ class LoginApiView(APIView):
 
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-
 class LogoutApiView(APIView):
     """POST: Logs user out by blacklisting tokens and removing cookies"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = []
 
     def post(self, request):
         access_token = request.COOKIES.get('access_token')
@@ -141,7 +154,6 @@ class LogoutApiView(APIView):
             return response
 
         return Response({'detail': 'Logout failed'}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class MeView(APIView):
     """GET: Returns current authenticated user's profile info"""
@@ -228,3 +240,57 @@ class ResetPasswordApiView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
+class ActivatedUserApiView(APIView):
+    def post(self, request): 
+        # Check if user is already activated
+        if request.user.profile.is_activated:
+            return Response({'message': 'Account is already activated'}, status=status.HTTP_200_OK)
+
+        activation_code = request.data.get('activation_code')
+        if not activation_code:
+            return Response({'message': 'Activation code is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            activation = ActivationCode.objects.get(user=request.user)
+        except ActivationCode.DoesNotExist:
+            return Response({'message': 'No activation code found for this account'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if activation.code != activation_code:
+            # rate limit for activation code
+            code_ratelimit = activation_code_ratelimit(request.user)
+            if not code_ratelimit:
+                return Response({"message":"Too many attempts"},status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({'detail': 'Invalid activation code'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if activation.is_expired():
+            return Response({'message': 'Activation code has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Success: Activate and delete code
+        profile = request.user.profile
+        profile.is_activated = True
+        profile.save()
+        activation.delete()
+        cache.delete(f"activation_attempts:{request.user.id}")
+        return Response({'message': 'Account activated successfully'}, status=status.HTTP_200_OK)
+
+class ResendActivationCodeApiView(APIView):
+    def post(self,request):
+        user = request.user
+        
+        if user.profile.is_activated:
+            return Response({'message': 'Account is already activated'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        last_code = ActivationCode.objects.filter(user=user).last()
+        if last_code and (timezone.now() - last_code.created_at < timedelta(seconds=60)):
+            return Response({'message': 'Please wait before requesting a new code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        if send_activation_code(user):
+            return Response({'message':'Resend Code Successfully'},status=status.HTTP_200_OK)  
+        else:
+            return Response({'message': 'Failed to resend activation code'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
+
+        
+        
+        
+            
+    

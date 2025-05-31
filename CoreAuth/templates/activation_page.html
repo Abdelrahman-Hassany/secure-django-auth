@@ -1,0 +1,107 @@
+{% extends 'homepage.html' %}
+
+{% block content %}
+
+<div class="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+
+    <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
+        {% if not request.user.is_authenticated %}
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">You must be logged in</h2>
+        <p class="text-center text-gray-500 mt-2">Redirecting to home page...</p>
+        <script>
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 2000);  // Redirect after 2 seconds
+        </script>
+        {% elif request.user.profile.is_activated %}
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Account is already activated</h2>
+        {% else %}
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Activation Account</h2>
+
+        <div id="message" class="mb-4 text-sm text-center font-medium text-gray-600"></div>
+
+        <form id="activationForm" class="space-y-6">
+            {% csrf_token %}
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Enter Your Activation Code</label>
+                <input type="text" name="activation-code" id="activation-code" required
+                    class="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"
+                    placeholder="Enter your activation code" />
+                <p class="text-sm text-red-600 mt-1 hidden"></p>
+            </div>
+            <button type="submit"
+                class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 font-medium">
+                Activate
+            </button>
+        </form>
+
+        <div class="text-center mt-4">
+            <button id="resendBtn" class="text-sm text-blue-600 hover:underline">Resend Activation Code</button>
+        </div>
+    </div>
+</div>
+<h1>no</h1>
+{% endif %}
+
+
+<script>
+    document.getElementById('activationForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const code = document.getElementById('activation-code').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        const response = await fetch("{% url 'api_active_account' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                activation_code: code
+            })
+        });
+
+        const data = await response.json();
+        const messageDiv = document.getElementById('message');
+
+        if (response.ok) {
+            messageDiv.textContent = data.message;
+            messageDiv.classList.remove("text-red-600");
+            messageDiv.classList.add("text-green-600");
+
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 2000);
+        } else {
+            messageDiv.textContent = data.message || data.detail;
+            messageDiv.classList.remove("text-green-600");
+            messageDiv.classList.add("text-red-600");
+        }
+    });
+
+    document.getElementById('resendBtn').addEventListener('click', async function () {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        const response = await fetch("{% url 'api_resend_activation_code' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await response.json();
+        const messageDiv = document.getElementById('message');
+
+        if (response.ok) {
+            messageDiv.textContent = data.message;
+            messageDiv.classList.remove("text-red-600");
+            messageDiv.classList.add("text-green-600");
+        } else {
+            messageDiv.textContent = data.message || data.detail;
+            messageDiv.classList.remove("text-green-600");
+            messageDiv.classList.add("text-red-600");
+        }
+    });
+</script>
+{% endblock %}

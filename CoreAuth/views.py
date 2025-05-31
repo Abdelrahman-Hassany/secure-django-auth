@@ -11,3 +11,6 @@ def request_reset_password(request):
 
 def reset_password(request,token):
     return render(request,'reset_password.html',{'token': token})
+
+def activation_page(request):
+    return render(request,'activation_page.html')

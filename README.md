@@ -149,16 +149,59 @@ def validate_password(self, value):
 - Access token refresh is seamless and secure
 - Middleware injects the token into request headers for DRF authentication
 
+
+## Activation Code Flow
+
+After user registration, an activation code is automatically sent to the user's email. This code is required to activate the account and access protected endpoints.
+
+### Activation Features:
+- A 6-digit code is generated and sent to the registered email.
+- The user must input this code on the `/activation-page/` frontend view.
+- A dedicated endpoint `/api/active-account/` accepts the code and activates the account.
+- Users can request a new code using the `/api/resend-code/` endpoint.
+- Activation codes expire after 30 minutes for security.
+
+## Account Activation Flow
+
+- After registration, a 6-digit activation code is sent to the user’s email.
+- User must enter this code at `/activation-page/` to activate the account.
+- If the user is not activated, all access to protected views is blocked via middleware until activation.
+- Users can request to resend the activation code via `/api/resend-code/`.
+- Too many failed attempts (more than 5 incorrect codes within 10 minutes) are blocked via Redis-based rate limiting.
+
+## Middleware Enforcement for Unactivated Users
+
+A custom JWT middleware has been implemented to block access to any part of the website unless the user has completed their activation via code.
+
+### Behavior:
+- If a user is not activated, any attempt to access protected resources will redirect them to the `/activation-page/`.
+- Middleware checks the `is_activated` flag on the `Profile` model and acts accordingly.
+
+
+## Rate Limiting for Activation Attempts
+
+To protect against brute-force attempts when entering the activation code, a rate limit has been introduced:
+
+- **Max attempts**: 5 failed tries within 10 minutes
+- **Backend**: Redis cache is used to track attempts
+- **Behavior**: After 5 incorrect tries, the user receives a `429 Too Many Requests` response for 10 minutes
+
+This feature helps improve security during the account activation step.
+
+
 ## API Endpoints
 
-| Method | Endpoint                         | Description                          |
-|--------|----------------------------------|--------------------------------------|
-| POST   | `/api/register/`                 | Register new user using reCAPTCHA    |
-| POST   | `/api/login/`                    | Login with email & password          |
-| POST   | `/api/logout/`                   | Logout user (invalidate token)       |
-| GET    | `/api/me/`                       | Retrieve authenticated user details  |
-| POST   | `/api/request-reset-password/`   | Request password reset link          |
-| POST   | `/api/reset-password/<token>/`   | Reset password using token           |
+| Method | Endpoint                         | Description                                           |
+|--------|----------------------------------|-------------------------------------------------------|
+| POST   | `/api/register/`                 | Register new user using reCAPTCHA                    |
+| POST   | `/api/login/`                    | Login with email & password                          |
+| POST   | `/api/logout/`                   | Logout user (invalidate token)                       |
+| GET    | `/api/me/`                       | Retrieve authenticated user details                  |
+| POST   | `/api/request-reset-password/`   | Request password reset link                          |
+| POST   | `/api/reset-password/<token>/`   | Reset password using token                           |
+| POST   | `/api/active-account/`           | Activate account using a 6-digit code sent by email  |
+| POST   | `/api/resend-code/`              | Resend activation code to the user's email           |
+
 
 ---
 
@@ -196,3 +239,4 @@ Tests cover key authentication flows including:
 ## Contributions
 
 Feel free to fork the repo and submit a pull request!
+
